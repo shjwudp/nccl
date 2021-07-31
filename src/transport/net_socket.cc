@@ -36,6 +36,7 @@ static ncclResult_t ncclSocketGetPciPath(char* devName, char** pciPath) {
 }
 
 ncclResult_t ncclSocketInit(ncclDebugLogger_t logFunction) {
+  INFO(NCCL_ALL, "ncclSocketInit");
   if (ncclNetIfs == -1) {
     pthread_mutex_lock(&ncclSocketLock);
     if (ncclNetIfs == -1) {
@@ -69,7 +70,7 @@ ncclResult_t ncclSocketInit(ncclDebugLogger_t logFunction) {
 
 ncclResult_t ncclSocketDevices(int* ndev) {
   *ndev = ncclNetIfs;
-  INFO(NCCL_ALL, "ndev=%d", *ndev);
+  INFO(NCCL_ALL, "ncclSocketDevices ndev=%d", *ndev);
   return ncclSuccess;
 }
 
@@ -89,12 +90,12 @@ static ncclResult_t ncclSocketGetSpeed(char* devName, int* speed) {
     INFO(NCCL_NET, "Could not get speed from %s. Defaulting to 10 Gbps.", speedPath);
     *speed = 10000;
   }
-  INFO(NCCL_ALL, "devName=%s, speed=%d", devName, *speed);
+  INFO(NCCL_ALL, "ncclSocketGetSpeed devName=%s, speed=%d", devName, *speed);
   return ncclSuccess;
 }
 
 ncclResult_t ncclSocketGetProperties(int dev, ncclNetProperties_t* props) {
-  INFO(NCCL_ALL, "name=%s, pciPath=%s, dev=%d", ncclSocketDevs[dev].devName, ncclSocketDevs[dev].pciPath, dev);
+  INFO(NCCL_ALL, "ncclSocketGetProperties name=%s, pciPath=%s, dev=%d", ncclSocketDevs[dev].devName, ncclSocketDevs[dev].pciPath, dev);
   props->name = ncclSocketDevs[dev].devName;
   props->pciPath = ncclSocketDevs[dev].pciPath;
   props->guid = dev;
@@ -299,7 +300,7 @@ ncclResult_t ncclSocketListen(int dev, void* opaqueHandle, void** listenComm) {
   NCCLCHECK(GetSocketAddr(dev, &handle->connectAddr));
   NCCLCHECK(createListenSocket(&comm->fd, &handle->connectAddr));
   NCCLCHECK(ncclSocketGetNsockNthread(dev, &comm->nSocks, &comm->nThreads));
-  INFO(NCCL_ALL, "dev=%d, nSocks=%d, nThreads=%d", dev, comm->nSocks, comm->nThreads);
+  INFO(NCCL_ALL, "ncclSocketListen dev=%d, nSocks=%d, nThreads=%d", dev, comm->nSocks, comm->nThreads);
   handle->nSocks = comm->nSocks;
   handle->nThreads = comm->nThreads;
   *listenComm = comm;
@@ -408,6 +409,7 @@ ncclResult_t ncclSocketGetTask(struct ncclSocketComm* comm, int op, void* data, 
 }
 
 ncclResult_t ncclSocketTest(void* request, int* done, int* size) {
+  INFO(NCCL_ALL, "ncclSocketTest, request=%p", request);
   *done = 0;
   struct ncclSocketRequest *r = (struct ncclSocketRequest*)request;
   if (r == NULL) {
@@ -487,6 +489,7 @@ ncclResult_t ncclSocketDeregMr(void* comm, void* mhandle) {
 }
 
 ncclResult_t ncclSocketIsend(void* sendComm, void* data, int size, void* mhandle, void** request) {
+  printf("printf ncclSocketIsend data=%p, size=%d\n", data, size);
   INFO(NCCL_ALL, "ncclSocketIsend data=%p, size=%d", data, size);
   struct ncclSocketComm* comm = (struct ncclSocketComm*)sendComm;
   NCCLCHECK(ncclSocketGetRequest(comm, NCCL_SOCKET_SEND, data, size, (struct ncclSocketRequest**)request));
@@ -494,6 +497,7 @@ ncclResult_t ncclSocketIsend(void* sendComm, void* data, int size, void* mhandle
 }
 
 ncclResult_t ncclSocketIrecv(void* recvComm, void* data, int size, void* mhandle, void** request) {
+  printf("printf ncclSocketIrecv data=%p, size=%d\n", data, size);
   INFO(NCCL_ALL, "ncclSocketIrecv data=%p, size=%d", data, size);
   struct ncclSocketComm* comm = (struct ncclSocketComm*)recvComm;
   NCCLCHECK(ncclSocketGetRequest(comm, NCCL_SOCKET_RECV, data, size, (struct ncclSocketRequest**)request));
