@@ -69,6 +69,7 @@ ncclResult_t ncclSocketInit(ncclDebugLogger_t logFunction) {
 
 ncclResult_t ncclSocketDevices(int* ndev) {
   *ndev = ncclNetIfs;
+  INFO(NCCL_ALL, "ndev=%d", *ndev);
   return ncclSuccess;
 }
 
@@ -88,10 +89,12 @@ static ncclResult_t ncclSocketGetSpeed(char* devName, int* speed) {
     INFO(NCCL_NET, "Could not get speed from %s. Defaulting to 10 Gbps.", speedPath);
     *speed = 10000;
   }
+  INFO(NCCL_ALL, "devName=%s, speed=%d", devName, *speed);
   return ncclSuccess;
 }
 
 ncclResult_t ncclSocketGetProperties(int dev, ncclNetProperties_t* props) {
+  INFO(NCCL_ALL, "name=%s, pciPath=%s, dev=%d", ncclSocketDevs[dev].devName, ncclSocketDevs[dev].pciPath, dev);
   props->name = ncclSocketDevs[dev].devName;
   props->pciPath = ncclSocketDevs[dev].pciPath;
   props->guid = dev;
@@ -296,6 +299,7 @@ ncclResult_t ncclSocketListen(int dev, void* opaqueHandle, void** listenComm) {
   NCCLCHECK(GetSocketAddr(dev, &handle->connectAddr));
   NCCLCHECK(createListenSocket(&comm->fd, &handle->connectAddr));
   NCCLCHECK(ncclSocketGetNsockNthread(dev, &comm->nSocks, &comm->nThreads));
+  INFO(NCCL_ALL, "dev=%d, nSocks=%d, nThreads=%d", dev, comm->nSocks, comm->nThreads);
   handle->nSocks = comm->nSocks;
   handle->nThreads = comm->nThreads;
   *listenComm = comm;
@@ -311,6 +315,7 @@ ncclResult_t ncclSocketConnect(int dev, void* opaqueHandle, void** sendComm) {
   struct ncclSocketHandle* handle = (struct ncclSocketHandle*) opaqueHandle;
   comm->nSocks = handle->nSocks;
   comm->nThreads = handle->nThreads;
+  INFO(NCCL_ALL, "ncclSocketConnect dev=%d", dev);
   for (int i=0; i<comm->nSocks+1; i++) {
     int tmpFd, offset=0;
     NCCLCHECK(connectAddress(&tmpFd, &handle->connectAddr));
@@ -329,6 +334,7 @@ ncclResult_t ncclSocketAccept(void* listenComm, void** recvComm) {
   NCCLCHECK(ncclSocketNewComm(&rComm));
   rComm->nSocks = lComm->nSocks;
   rComm->nThreads = lComm->nThreads;
+  INFO(NCCL_ALL, "ncclSocketAccept lComm->fd=%d", lComm->fd);
   for (int i=0; i<rComm->nSocks+1; i++) {
     int tmpFd, sendSockIdx, offset=0;
     socklen_t socklen = sizeof(union socketAddress);
@@ -472,28 +478,36 @@ ncclResult_t ncclSocketTest(void* request, int* done, int* size) {
 }
 
 ncclResult_t ncclSocketRegMr(void* comm, void* data, int size, int type, void** mhandle) {
+  INFO(NCCL_ALL, "ncclSocketRegMr comm=%p, data=%p, size=%d, type=%d", comm, data, size, type);
   return (type != NCCL_PTR_HOST) ? ncclInternalError : ncclSuccess;
 }
-ncclResult_t ncclSocketDeregMr(void* comm, void* mhandle) { return ncclSuccess; }
+ncclResult_t ncclSocketDeregMr(void* comm, void* mhandle) { 
+  INFO(NCCL_ALL, "ncclSocketDeregMr comm=%p", comm);
+  return ncclSuccess;
+}
 
 ncclResult_t ncclSocketIsend(void* sendComm, void* data, int size, void* mhandle, void** request) {
+  INFO(NCCL_ALL, "ncclSocketIsend data=%p, size=%d", data, size);
   struct ncclSocketComm* comm = (struct ncclSocketComm*)sendComm;
   NCCLCHECK(ncclSocketGetRequest(comm, NCCL_SOCKET_SEND, data, size, (struct ncclSocketRequest**)request));
   return ncclSuccess;
 }
 
 ncclResult_t ncclSocketIrecv(void* recvComm, void* data, int size, void* mhandle, void** request) {
+  INFO(NCCL_ALL, "ncclSocketIrecv data=%p, size=%d", data, size);
   struct ncclSocketComm* comm = (struct ncclSocketComm*)recvComm;
   NCCLCHECK(ncclSocketGetRequest(comm, NCCL_SOCKET_RECV, data, size, (struct ncclSocketRequest**)request));
   return ncclSuccess;
 }
 
 ncclResult_t ncclSocketIflush(void* recvComm, void* data, int size, void* mhandle, void** request) {
+  INFO(NCCL_ALL, "ncclSocketIflush data=%p, size=%d", data, size);
   // We don't support CUDA pointers, so we don't need a flush operation
   return ncclInternalError;
 }
 
 ncclResult_t ncclSocketCloseListen(void* opaqueComm) {
+  INFO(NCCL_ALL, "ncclSocketCloseListen opaqueComm=%p", opaqueComm);
   struct ncclSocketListenComm* comm = (struct ncclSocketListenComm*)opaqueComm;
   if (comm) {
     if (comm->fd != -1) close(comm->fd);
@@ -503,6 +517,7 @@ ncclResult_t ncclSocketCloseListen(void* opaqueComm) {
 }
 
 ncclResult_t ncclSocketClose(void* opaqueComm) {
+  INFO(NCCL_ALL, "ncclSocketClose opaqueComm=%p", opaqueComm);
   struct ncclSocketComm* comm = (struct ncclSocketComm*)opaqueComm;
   if (comm) {
     for (int i=0; i<comm->nThreads; i++) {
