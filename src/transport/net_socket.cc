@@ -491,7 +491,6 @@ ncclResult_t ncclSocketDeregMr(void* comm, void* mhandle) {
 }
 
 ncclResult_t ncclSocketIsend(void* sendComm, void* data, int size, void* mhandle, void** request) {
-  printf("printf ncclSocketIsend data=%p, size=%d\n", data, size);
   INFO(NCCL_ALL, "ncclSocketIsend data=%p, size=%d", data, size);
   struct ncclSocketComm* comm = (struct ncclSocketComm*)sendComm;
   NCCLCHECK(ncclSocketGetRequest(comm, NCCL_SOCKET_SEND, data, size, (struct ncclSocketRequest**)request));
@@ -499,7 +498,6 @@ ncclResult_t ncclSocketIsend(void* sendComm, void* data, int size, void* mhandle
 }
 
 ncclResult_t ncclSocketIrecv(void* recvComm, void* data, int size, void* mhandle, void** request) {
-  printf("printf ncclSocketIrecv data=%p, size=%d\n", data, size);
   INFO(NCCL_ALL, "ncclSocketIrecv data=%p, size=%d", data, size);
   struct ncclSocketComm* comm = (struct ncclSocketComm*)recvComm;
   NCCLCHECK(ncclSocketGetRequest(comm, NCCL_SOCKET_RECV, data, size, (struct ncclSocketRequest**)request));
