@@ -4,6 +4,8 @@
  * See LICENSE.txt for license information
  ************************************************************************/
 
+#include <algorithm>
+
 // #include "comm.h"
 // #include "core.h"
 // #include "socket.h"
@@ -39,11 +41,44 @@
 #define NCCL_PTR_CUDA 0x2
 
 #define NCCL_NET_HANDLE_MAXSIZE 64
+#define MAX_REQUESTS NCCL_NET_MAX_REQUESTS
 
 typedef enum {NCCL_LOG_NONE=0, NCCL_LOG_VERSION=1, NCCL_LOG_WARN=2, NCCL_LOG_INFO=3, NCCL_LOG_ABORT=4, NCCL_LOG_TRACE=5} ncclDebugLogLevel;
 typedef enum {NCCL_INIT=1, NCCL_COLL=2, NCCL_P2P=4, NCCL_SHM=8, NCCL_NET=16, NCCL_GRAPH=32, NCCL_TUNING=64, NCCL_ENV=128, NCCL_ALLOC=256, NCCL_ALL=~0} ncclDebugLogSubSys;
 
 typedef void (*ncclDebugLogger_t)(ncclDebugLogLevel level, unsigned long flags, const char *file, int line, const char *fmt, ...);
+
+void ncclDebugLog(ncclDebugLogLevel level, unsigned long flags, const char *filefunc, int line, const char *fmt, ...) __attribute__ ((format (printf, 5, 6)));
+
+#define WARN(...) ncclDebugLog(NCCL_LOG_WARN, NCCL_ALL, __FILE__, __LINE__, __VA_ARGS__)
+#define INFO(FLAGS, ...) ncclDebugLog(NCCL_LOG_INFO, (FLAGS), __func__, __LINE__, __VA_ARGS__)
+
+// Propagate errors up
+#define NCCLCHECK(call) do { \
+  ncclResult_t res = call; \
+  if (res != ncclSuccess) { \
+    /* Print the back trace*/ \
+    if (ncclDebugNoWarn == 0) INFO(NCCL_ALL,"%s:%d -> %d", __FILE__, __LINE__, res);    \
+    return res; \
+  } \
+} while (0);
+
+#define SYSCHECKVAL(call, name, retval) do { \
+  SYSCHECKSYNC(call, name, retval); \
+  if (retval == -1) { \
+    WARN("Call to " name " failed : %s", strerror(errno)); \
+    return ncclSystemError; \
+  } \
+} while (false)
+
+#define SYSCHECKSYNC(call, name, retval) do { \
+  retval = call; \
+  if (retval == -1 && (errno == EINTR || errno == EWOULDBLOCK || errno == EAGAIN)) { \
+    INFO(NCCL_ALL,"Call to " name " returned %s, retrying", strerror(errno)); \
+  } else { \
+    break; \
+  } \
+} while(true)
 
 typedef struct {
   char* name;     // Used mostly for logging.
@@ -84,6 +119,48 @@ struct ncclSocketDev {
 static struct ncclSocketDev ncclSocketDevs[MAX_IFS];
 
 pthread_mutex_t ncclSocketLock = PTHREAD_MUTEX_INITIALIZER;
+
+/* Format a string representation of a (union socketAddress *) socket address using getnameinfo()
+ *
+ * Output: "IPv4/IPv6 address<port>"
+ */
+static inline const char *socketToString(union socketAddress *addr, char *buf) {
+  if (buf == NULL || addr == NULL) return NULL;
+  struct sockaddr *saddr = &addr->sa;
+  if (saddr->sa_family != AF_INET && saddr->sa_family != AF_INET6) { buf[0]='\0'; return buf; }
+  char host[NI_MAXHOST], service[NI_MAXSERV];
+  (void) getnameinfo(saddr, sizeof(union socketAddress), host, NI_MAXHOST, service, NI_MAXSERV, NI_NUMERICHOST|NI_NUMERICSERV);
+  sprintf(buf, "%s<%s>", host, service);
+  return buf;
+}
+
+static ncclResult_t socketProgressOpt(int op, int fd, union socketAddress *addr, void* ptr, int size, int* offset, int block) {
+  int bytes = 0;
+  char* data = (char*)ptr;
+  char line[SOCKET_NAME_MAXLEN+1];
+  do {
+    if (op == NCCL_SOCKET_RECV) bytes = recv(fd, data+(*offset), size-(*offset), block ? 0 : MSG_DONTWAIT);
+    if (op == NCCL_SOCKET_SEND) bytes = send(fd, data+(*offset), size-(*offset), block ? 0 : MSG_DONTWAIT);
+    if (op == NCCL_SOCKET_RECV && bytes == 0) {
+      WARN("Net : Connection closed by remote peer %s", socketToString(addr, line));
+      return ncclSystemError;
+    }
+    if (bytes == -1) {
+      if (errno != EINTR && errno != EWOULDBLOCK && errno != EAGAIN) {
+        WARN("Net : Call to recv from %s failed : %s", socketToString(addr, line), strerror(errno));
+        return ncclSystemError;
+      } else {
+        bytes = 0;
+      }
+    }
+    (*offset) += bytes;
+  } while (bytes > 0 && (*offset) < size);
+  return ncclSuccess;
+}
+
+static ncclResult_t socketProgress(int op, int fd, union socketAddress *addr, void* ptr, int size, int* offset) {
+  return socketProgressOpt(op, fd, addr, ptr, size, offset, 0);
+}
 
 static ncclResult_t ncclSocketGetPciPath(char* devName, char** pciPath) {
   char devicePath[PATH_MAX];

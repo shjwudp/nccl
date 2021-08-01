@@ -409,7 +409,7 @@ ncclResult_t ncclSocketGetTask(struct ncclSocketComm* comm, int op, void* data, 
 }
 
 ncclResult_t ncclSocketTest(void* request, int* done, int* size) {
-  INFO(NCCL_ALL, "ncclSocketTest, request=%p", request);
+  // INFO(NCCL_ALL, "ncclSocketTest, request=%p", request);
   *done = 0;
   struct ncclSocketRequest *r = (struct ncclSocketRequest*)request;
   if (r == NULL) {
