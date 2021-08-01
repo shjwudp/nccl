@@ -4,10 +4,10 @@
  * See LICENSE.txt for license information
  ************************************************************************/
 
-#include "comm.h"
-#include "core.h"
-#include "socket.h"
-#include "net.h"
+// #include "comm.h"
+// #include "core.h"
+// #include "socket.h"
+// #include "net.h"
 #include "param.h"
 
 #include <pthread.h>
@@ -15,6 +15,64 @@
 #include <poll.h>
 #include <limits.h>
 #include <fcntl.h>
+#include <errno.h>
+
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <netinet/tcp.h>
+#include <unistd.h>
+#include <netdb.h>
+#include <ifaddrs.h>
+#include <net/if.h>
+
+#define MAX_IFS 16
+#define MAX_IF_NAME_SIZE 16
+#define SLEEP_INT            1000 // connection retry sleep interval in usec
+#define RETRY_REFUSED_TIMES   2e4 // connection refused retry times before reporting a timeout (20 sec)
+#define RETRY_TIMEDOUT_TIMES    3 // connection timed out retry times (each one can take 20s)
+#define SOCKET_NAME_MAXLEN (NI_MAXHOST+NI_MAXSERV)
+
+#define NCCL_SOCKET_SEND 0
+#define NCCL_SOCKET_RECV 1
+
+#define NCCL_PTR_HOST 0x1
+#define NCCL_PTR_CUDA 0x2
+
+#define NCCL_NET_HANDLE_MAXSIZE 64
+
+typedef enum {NCCL_LOG_NONE=0, NCCL_LOG_VERSION=1, NCCL_LOG_WARN=2, NCCL_LOG_INFO=3, NCCL_LOG_ABORT=4, NCCL_LOG_TRACE=5} ncclDebugLogLevel;
+typedef enum {NCCL_INIT=1, NCCL_COLL=2, NCCL_P2P=4, NCCL_SHM=8, NCCL_NET=16, NCCL_GRAPH=32, NCCL_TUNING=64, NCCL_ENV=128, NCCL_ALLOC=256, NCCL_ALL=~0} ncclDebugLogSubSys;
+
+typedef void (*ncclDebugLogger_t)(ncclDebugLogLevel level, unsigned long flags, const char *file, int line, const char *fmt, ...);
+
+typedef struct {
+  char* name;     // Used mostly for logging.
+  char* pciPath;  // Path to the PCI device in /sys.
+  uint64_t guid;  // Unique identifier for the NIC chip. Important for
+                  // cards with multiple PCI functions (Physical or virtual).
+  int ptrSupport; // NCCL_PTR_HOST or NCCL_PTR_HOST|NCCL_PTR_CUDA
+  int speed;      // Port speed in Mbps.
+  int port;       // Port number.
+  int maxComms;   // Maximum number of comms we can create
+}ncclNetProperties_v4_t;
+
+typedef ncclNetProperties_v4_t ncclNetProperties_t;
+
+/* Error type */
+typedef enum { ncclSuccess                 =  0,
+               ncclUnhandledCudaError      =  1,
+               ncclSystemError             =  2,
+               ncclInternalError           =  3,
+               ncclInvalidArgument         =  4,
+               ncclInvalidUsage            =  5,
+               ncclNumResults              =  6 } ncclResult_t;
+
+/* Common socket address storage structure for IPv4/IPv6 */
+union socketAddress {
+  struct sockaddr sa;
+  struct sockaddr_in sin;
+  struct sockaddr_in6 sin6;
+};
 
 /* Init functions */
 static int ncclNetIfs = -1;
