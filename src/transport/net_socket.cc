@@ -58,7 +58,7 @@ ncclResult_t ncclSocketInit(ncclDebugLogger_t logFunction) {
           NCCLCHECK(ncclSocketGetPciPath(ncclSocketDevs[i].devName, &ncclSocketDevs[i].pciPath));
           snprintf(line+strlen(line), MAX_LINE_LEN-strlen(line), " [%d]%s:%s", i, names+i*MAX_IF_NAME_SIZE,
               socketToString(&addrs[i], addrline));
-          INFO(NCCL_ALL, "addrs[%d]=%s", i, addrs[i]);
+          INFO(NCCL_ALL, "addrs[%d]=%s", i, addrline);
         }
         line[MAX_LINE_LEN] = '\0';
         INFO(NCCL_INIT|NCCL_NET,"NET/Socket : Using%s", line);
