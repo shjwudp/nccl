@@ -59,6 +59,7 @@ ncclResult_t ncclSocketInit(ncclDebugLogger_t logFunction) {
           snprintf(line+strlen(line), MAX_LINE_LEN-strlen(line), " [%d]%s:%s", i, names+i*MAX_IF_NAME_SIZE,
               socketToString(&addrs[i], addrline));
         }
+        INFO(NCCL_ALL, "addrs[%d]=%s", i, addrs[i]);
         line[MAX_LINE_LEN] = '\0';
         INFO(NCCL_INIT|NCCL_NET,"NET/Socket : Using%s", line);
       }
@@ -300,7 +301,8 @@ ncclResult_t ncclSocketListen(int dev, void* opaqueHandle, void** listenComm) {
   NCCLCHECK(GetSocketAddr(dev, &handle->connectAddr));
   NCCLCHECK(createListenSocket(&comm->fd, &handle->connectAddr));
   NCCLCHECK(ncclSocketGetNsockNthread(dev, &comm->nSocks, &comm->nThreads));
-  INFO(NCCL_ALL, "ncclSocketListen dev=%d, nSocks=%d, nThreads=%d", dev, comm->nSocks, comm->nThreads);
+  INFO(NCCL_ALL, "ncclSocketListen dev=%d, nSocks=%d, nThreads=%d, opaqueHandle=%p, comm=%p",
+    dev, comm->nSocks, comm->nThreads, opaqueHandle, comm);
   handle->nSocks = comm->nSocks;
   handle->nThreads = comm->nThreads;
   *listenComm = comm;
